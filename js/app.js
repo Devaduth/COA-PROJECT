@@ -24,19 +24,69 @@ const state = {
   charts: {},
   stallMode: 'none',
   cacheMode: 'single',
+  reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
 };
 
 // ═══════════════════════════════════════════
 //  INITIALIZATION
 // ═══════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
+  initPreloader();
   initLenis();
+  initCustomCursor();
   initGSAP();
   initNavigation();
   initScrollProgress();
   initTheoryToggles();
   initPillGroups();
+  initCardSpotlight();
+  initMagneticButtons();
+  initRippleEffect();
+  initHeroParticles();
+  initScrollToTop();
+  initFooterReveal();
 });
+
+// ═══════════════════════════════════════════
+//  PRELOADER
+// ═══════════════════════════════════════════
+function initPreloader() {
+  const preloader = document.getElementById('preloader');
+  if (!preloader) return;
+  if (state.reducedMotion) { preloader.classList.add('done'); return; }
+  window.addEventListener('load', () => {
+    gsap.to(preloader, {
+      opacity: 0, duration: 0.6, delay: 1.2, ease: 'power2.inOut',
+      onComplete: () => { preloader.classList.add('done'); }
+    });
+  });
+  // Safety fallback — hide after 4s no matter what
+  setTimeout(() => preloader.classList.add('done'), 4000);
+}
+
+// ═══════════════════════════════════════════
+//  CUSTOM CURSOR
+// ═══════════════════════════════════════════
+function initCustomCursor() {
+  if (state.reducedMotion || 'ontouchstart' in window) return;
+  const dot = document.getElementById('cursorDot');
+  const ring = document.getElementById('cursorRing');
+  if (!dot || !ring) return;
+
+  let mx = -100, my = -100;
+  document.addEventListener('mousemove', (e) => {
+    mx = e.clientX; my = e.clientY;
+    gsap.to(dot, { x: mx, y: my, duration: 0.08, ease: 'power2.out' });
+    gsap.to(ring, { x: mx, y: my, duration: 0.25, ease: 'power2.out' });
+  });
+
+  // Hover effect on interactive elements
+  const hoverEls = document.querySelectorAll('a, button, input, .feature-card, .pill, .nav-link');
+  hoverEls.forEach(el => {
+    el.addEventListener('mouseenter', () => ring.classList.add('hovering'));
+    el.addEventListener('mouseleave', () => ring.classList.remove('hovering'));
+  });
+}
 
 // ═══════════════════════════════════════════
 //  LENIS SMOOTH SCROLL
@@ -86,12 +136,35 @@ function initScrollProgress() {
 function initGSAP() {
   gsap.registerPlugin(ScrollTrigger);
 
-  // ── Hero entrance ──
-  const heroItems = document.querySelectorAll('#heroContent .anim-item');
+  // ── Hero text split animation ──
+  const heroTitle = document.querySelector('.hero-title[data-split]');
+  if (heroTitle && !state.reducedMotion) {
+    splitTextIntoWords(heroTitle);
+    const words = heroTitle.querySelectorAll('.word');
+    gsap.to(words, {
+      y: 0, opacity: 1, rotateX: 0,
+      duration: 0.9, stagger: 0.06, ease: 'power3.out', delay: 0.4,
+    });
+  }
+
+  // ── Hero entrance (non-split items) ──
+  const heroItems = document.querySelectorAll('#heroContent .anim-item:not([data-split])');
   gsap.fromTo(heroItems,
     { opacity: 0, y: 40 },
-    { opacity: 1, y: 0, duration: 0.9, stagger: 0.15, ease: 'power3.out', delay: 0.2 }
+    { opacity: 1, y: 0, duration: 0.9, stagger: 0.15, ease: 'power3.out', delay: 0.3 }
   );
+
+  // ── Hero parallax ──
+  if (!state.reducedMotion) {
+    gsap.to('.hero-bg-grid', {
+      yPercent: 30, ease: 'none',
+      scrollTrigger: { trigger: '.hero-section', start: 'top top', end: 'bottom top', scrub: true }
+    });
+    gsap.to('.hero-glow', {
+      yPercent: 50, scale: 1.2, ease: 'none',
+      scrollTrigger: { trigger: '.hero-section', start: 'top top', end: 'bottom top', scrub: true }
+    });
+  }
 
   // ── Feature cards stagger ──
   const featureCards = document.querySelectorAll('#featureGrid .anim-item');
@@ -145,7 +218,9 @@ function animateResults(containerId) {
   const metrics = el.querySelectorAll('.metric-card');
   gsap.fromTo(metrics,
     { opacity: 0, y: 15, scale: 0.95 },
-    { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.06, ease: 'power3.out', delay: 0.15 }
+    { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.06, ease: 'power3.out', delay: 0.15,
+      onComplete: () => animateCounters(el),
+    }
   );
 }
 
@@ -160,6 +235,207 @@ function animateCharts(containerId) {
     { opacity: 0, y: 25, scale: 0.97 },
     { opacity: 1, y: 0, scale: 1, duration: 0.5, stagger: 0.1, ease: 'power3.out', delay: 0.1 }
   );
+}
+
+// ═══════════════════════════════════════════
+//  TEXT SPLIT HELPER
+// ═══════════════════════════════════════════
+function splitTextIntoWords(el) {
+  const processNode = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const words = node.textContent.split(/(\s+)/);
+      const frag = document.createDocumentFragment();
+      words.forEach(word => {
+        if (word.trim() === '') {
+          frag.appendChild(document.createTextNode(word));
+        } else {
+          const wrap = document.createElement('span');
+          wrap.className = 'word-wrap';
+          const inner = document.createElement('span');
+          inner.className = 'word';
+          inner.textContent = word;
+          inner.style.transform = 'translateY(110%) rotateX(-15deg)';
+          inner.style.opacity = '0';
+          wrap.appendChild(inner);
+          frag.appendChild(wrap);
+        }
+      });
+      return frag;
+    }
+    return null;
+  };
+
+  const children = [...el.childNodes];
+  children.forEach(child => {
+    if (child.nodeType === Node.TEXT_NODE) {
+      const frag = processNode(child);
+      if (frag) el.replaceChild(frag, child);
+    } else if (child.nodeType === Node.ELEMENT_NODE) {
+      // For child elements like .gradient-text, split inside them
+      const innerChildren = [...child.childNodes];
+      innerChildren.forEach(inner => {
+        if (inner.nodeType === Node.TEXT_NODE) {
+          const frag = processNode(inner);
+          if (frag) child.replaceChild(frag, inner);
+        }
+      });
+    }
+  });
+  // Force visibility of the parent
+  el.style.opacity = '1';
+}
+
+// ═══════════════════════════════════════════
+//  CARD SPOTLIGHT (cursor-following glow)
+// ═══════════════════════════════════════════
+function initCardSpotlight() {
+  document.querySelectorAll('[data-tilt]').forEach(card => {
+    const spotlight = card.querySelector('.card-spotlight');
+    card.addEventListener('mousemove', (e) => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      if (spotlight) {
+        spotlight.style.setProperty('--x', x + 'px');
+        spotlight.style.setProperty('--y', y + 'px');
+      }
+      if (!state.reducedMotion) {
+        const rotX = ((y / rect.height) - 0.5) * -8;
+        const rotY = ((x / rect.width) - 0.5) * 8;
+        gsap.to(card, { rotateX: rotX, rotateY: rotY, duration: 0.4, ease: 'power2.out', transformPerspective: 800 });
+      }
+    });
+    card.addEventListener('mouseleave', () => {
+      gsap.to(card, { rotateX: 0, rotateY: 0, duration: 0.6, ease: 'elastic.out(1, 0.5)' });
+    });
+  });
+}
+
+// ═══════════════════════════════════════════
+//  MAGNETIC BUTTONS
+// ═══════════════════════════════════════════
+function initMagneticButtons() {
+  if (state.reducedMotion) return;
+  document.querySelectorAll('.magnetic').forEach(btn => {
+    btn.addEventListener('mousemove', (e) => {
+      const rect = btn.getBoundingClientRect();
+      const dx = e.clientX - (rect.left + rect.width / 2);
+      const dy = e.clientY - (rect.top + rect.height / 2);
+      gsap.to(btn, { x: dx * 0.2, y: dy * 0.2, duration: 0.3, ease: 'power2.out' });
+    });
+    btn.addEventListener('mouseleave', () => {
+      gsap.to(btn, { x: 0, y: 0, duration: 0.5, ease: 'elastic.out(1, 0.4)' });
+    });
+  });
+}
+
+// ═══════════════════════════════════════════
+//  RIPPLE EFFECT
+// ═══════════════════════════════════════════
+function initRippleEffect() {
+  document.querySelectorAll('.btn-primary').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const rect = btn.getBoundingClientRect();
+      const ripple = document.createElement('span');
+      ripple.className = 'btn-ripple';
+      const size = Math.max(rect.width, rect.height);
+      ripple.style.width = ripple.style.height = size + 'px';
+      ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+      ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+      btn.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 600);
+    });
+  });
+}
+
+// ═══════════════════════════════════════════
+//  HERO PARTICLES
+// ═══════════════════════════════════════════
+function initHeroParticles() {
+  if (state.reducedMotion) return;
+  const container = document.getElementById('heroParticles');
+  if (!container) return;
+  for (let i = 0; i < 30; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = Math.random() * 100 + '%';
+    p.style.top = Math.random() * 100 + '%';
+    container.appendChild(p);
+    gsap.to(p, {
+      y: -80 - Math.random() * 120,
+      x: (Math.random() - 0.5) * 60,
+      opacity: 0.3 + Math.random() * 0.4,
+      duration: 3 + Math.random() * 4,
+      repeat: -1,
+      yoyo: true,
+      ease: 'sine.inOut',
+      delay: Math.random() * 3,
+    });
+  }
+}
+
+// ═══════════════════════════════════════════
+//  SCROLL TO TOP
+// ═══════════════════════════════════════════
+function initScrollToTop() {
+  const btn = document.getElementById('scrollTop');
+  if (!btn) return;
+
+  const toggleVisibility = () => {
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    btn.classList.toggle('visible', scrollTop > 400);
+  };
+  window.addEventListener('scroll', toggleVisibility, { passive: true });
+
+  btn.addEventListener('click', () => {
+    if (state.lenis) {
+      state.lenis.scrollTo(0, { duration: 1.5 });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  });
+}
+
+// ═══════════════════════════════════════════
+//  FOOTER REVEAL
+// ═══════════════════════════════════════════
+function initFooterReveal() {
+  const footer = document.querySelector('.footer-reveal');
+  if (!footer) return;
+  ScrollTrigger.create({
+    trigger: footer,
+    start: 'top 95%',
+    onEnter: () => footer.classList.add('revealed'),
+    once: true,
+  });
+}
+
+// ═══════════════════════════════════════════
+//  ANIMATED COUNTER
+// ═══════════════════════════════════════════
+function animateCounters(container) {
+  if (state.reducedMotion) return;
+  const values = container.querySelectorAll('.metric-value');
+  values.forEach(el => {
+    const text = el.textContent.trim();
+    const match = text.match(/^([\d,.]+)/);
+    if (!match) return;
+    const target = parseFloat(match[1].replace(/,/g, ''));
+    if (isNaN(target) || target === 0) return;
+    const suffix = text.replace(match[1], '');
+    const hasDecimals = match[1].includes('.');
+    const decimals = hasDecimals ? (match[1].split('.')[1] || '').length : 0;
+    el.textContent = '0' + suffix;
+    gsap.to({ val: 0 }, {
+      val: target,
+      duration: 1.2,
+      ease: 'power2.out',
+      onUpdate: function () {
+        const v = this.targets()[0].val;
+        el.textContent = (decimals > 0 ? v.toFixed(decimals) : Math.round(v).toLocaleString()) + suffix;
+      },
+    });
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -252,26 +528,53 @@ function initTheoryToggles() {
 //  PILL GROUPS (stall mode, cache mode)
 // ═══════════════════════════════════════════
 function initPillGroups() {
+  // Generic pill-slider positioning helper
+  function positionSlider(group) {
+    const slider = group.querySelector('.pill-slider');
+    const active = group.querySelector('.pill.active');
+    if (!slider || !active) return;
+    const groupRect = group.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    slider.style.width = activeRect.width + 'px';
+    slider.style.transform = `translateX(${activeRect.left - groupRect.left - 4}px)`;
+  }
+
   // Stall mode pills
-  document.querySelectorAll('#stallModeGroup .pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      document.querySelectorAll('#stallModeGroup .pill').forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-      state.stallMode = pill.dataset.value;
-      document.getElementById('manualControls').style.display = state.stallMode === 'manual' ? '' : 'none';
-      document.getElementById('randomControls').style.display = state.stallMode === 'random' ? '' : 'none';
+  const stallGroup = document.getElementById('stallModeGroup');
+  if (stallGroup) {
+    positionSlider(stallGroup);
+    stallGroup.querySelectorAll('.pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        stallGroup.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        state.stallMode = pill.dataset.value;
+        positionSlider(stallGroup);
+        document.getElementById('manualControls').style.display = state.stallMode === 'manual' ? '' : 'none';
+        document.getElementById('randomControls').style.display = state.stallMode === 'random' ? '' : 'none';
+      });
     });
-  });
+  }
 
   // Cache mode pills
-  document.querySelectorAll('#cacheModeGroup .pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      document.querySelectorAll('#cacheModeGroup .pill').forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-      state.cacheMode = pill.dataset.value;
-      document.getElementById('singleCacheInputs').style.display = state.cacheMode === 'single' ? '' : 'none';
-      document.getElementById('multiCacheInputs').style.display = state.cacheMode === 'multi' ? '' : 'none';
+  const cacheGroup = document.getElementById('cacheModeGroup');
+  if (cacheGroup) {
+    positionSlider(cacheGroup);
+    cacheGroup.querySelectorAll('.pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        cacheGroup.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        state.cacheMode = pill.dataset.value;
+        positionSlider(cacheGroup);
+        document.getElementById('singleCacheInputs').style.display = state.cacheMode === 'single' ? '' : 'none';
+        document.getElementById('multiCacheInputs').style.display = state.cacheMode === 'multi' ? '' : 'none';
+      });
     });
+  }
+
+  // Reposition on resize
+  window.addEventListener('resize', () => {
+    if (stallGroup) positionSlider(stallGroup);
+    if (cacheGroup) positionSlider(cacheGroup);
   });
 }
 
@@ -586,6 +889,7 @@ function renderGantt(numInstr, startCycles, stallAfter, stallCycles, stages, tot
     // Cells
     for (let c = 0; c < totalCycles; c++) {
       const cell = document.createElement('div');
+      cell.setAttribute('data-col', c);
       const stageIdx = c - startCycles[i];
       if (stageIdx >= 0 && stageIdx < stages.length) {
         const stageName = stages[stageIdx];
@@ -607,6 +911,7 @@ function renderGantt(numInstr, startCycles, stallAfter, stallCycles, stages, tot
 
         for (let c = 0; c < totalCycles; c++) {
           const cell = document.createElement('div');
+          cell.setAttribute('data-col', c);
           const bubbleCycle = startCycles[i] + 1 + b;
           if (c === bubbleCycle) {
             cell.className = 'gantt-cell cell-stall';
@@ -620,12 +925,14 @@ function renderGantt(numInstr, startCycles, stallAfter, stallCycles, stages, tot
     }
   }
 
-  // Animate gantt cells
-  const cells = grid.querySelectorAll('.gantt-cell:not(.cell-empty)');
-  gsap.fromTo(cells,
-    { opacity: 0, scale: 0.7 },
-    { opacity: 1, scale: 1, duration: 0.3, stagger: 0.02, ease: 'back.out(1.5)', delay: 0.1 }
-  );
+  // Animate gantt cells column-by-column
+  for (let c = 0; c < totalCycles; c++) {
+    const colCells = grid.querySelectorAll(`.gantt-cell[data-col="${c}"]:not(.cell-empty)`);
+    gsap.fromTo(colCells,
+      { opacity: 0, scale: 0.6, rotateY: -20 },
+      { opacity: 1, scale: 1, rotateY: 0, duration: 0.35, stagger: 0.03, ease: 'back.out(1.5)', delay: 0.1 + c * 0.06 }
+    );
+  }
 }
 
 // ═══════════════════════════════════════════
