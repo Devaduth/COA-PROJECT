@@ -1,0 +1,7 @@
+processor_simulator/
+__pycache__/
+*.py
+*.pyc
+.venv/
+.env
+.git/
