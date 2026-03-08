@@ -145,6 +145,20 @@ img { max-width:100%; display:block; }
   background:var(--surface); border:1px solid var(--border);
   color:var(--text-secondary);
 }
+/* Group info */
+.group-info { margin-bottom:4px; }
+.member-list {
+  list-style:none; margin-top:8px; display:flex; flex-direction:column; gap:6px;
+}
+.member-list li {
+  font-size:11px; color:var(--text-secondary); line-height:1.4;
+  display:flex; align-items:baseline; gap:6px;
+}
+.member-id {
+  font-family:var(--font-mono); font-size:10px; font-weight:600;
+  color:var(--primary-light); background:rgba(99,102,241,.1);
+  padding:1px 6px; border-radius:4px; flex-shrink:0; letter-spacing:.2px;
+}
 .copyright { font-size:11px; color:var(--text-muted); margin-top:14px; padding:0 4px; }
 
 /* ═══════════════════════════════════════════
